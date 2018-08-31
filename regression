@@ -1,0 +1,153 @@
+import sys  
+import os
+import pandas as pd
+import csv
+import openpyxl
+import xlsxwriter
+import statsmodels.api as sm
+
+#from datetime import datetime
+#import matplotlib.pyplot as pyplot
+import numpy as np
+#import array
+arr=np.array([])
+#set working directory
+os.chdir("/Users/Jason/Desktop/")
+table=0
+tablet1=0
+n=0
+xs=[]
+ys=[]
+ys2=[]
+yy=[]
+result=0
+results=[]
+dates=[]
+items=[]
+quantity=[]
+table=[]
+r3=[]
+r33=[]
+r4=[]
+#fix utf bug
+reload(sys)  
+sys.setdefaultencoding('utf8')
+
+#get filename input
+n=input("please enter top n results:")
+minmonth=input("please enter beginning month:")
+maxmonth=input("please enter last month:")
+x=raw_input("Please enter csv filename:")
+n=int(n)
+#create a list
+#with open(x) as csv_file:
+df=pd.read_csv(x)
+    
+    #csv.reader(csv_file, delimiter=",")
+ 
+#convert dates to usable date code
+
+pd.to_datetime(df['OrderDate']).apply(lambda x: x.date())
+df['Month'] = pd.DatetimeIndex(df['OrderDate']).month
+df2=df[['Month','Description','Quantity']].copy()
+#maxmonths=max(df['Month'])
+#drop rows with missing data
+df2.dropna(inplace=True)
+    
+
+#create pivot table
+table=df2.pivot_table(index='Month', columns='Description',values='Quantity',aggfunc='sum')
+
+#create totals
+table.loc['sum'] = table.sum()
+
+
+#transpose matrix
+tablet=table.T
+
+#take top n values
+tablet1 = tablet.sort_values('sum',ascending = False).head(n)
+
+#eliminate the blanks in the table
+tablet1=tablet1.fillna(0)
+#convert pivot table to df
+flattened = pd.DataFrame(tablet1.to_records())
+
+# Create a Pandas Excel writer using XlsxWriter as the engine.
+sheet_name = 'Sheet1'
+writer     = pd.ExcelWriter('pandas_chart_line.xlsx', engine='xlsxwriter')
+flattened.to_excel(writer, sheet_name=sheet_name)
+
+# Access the XlsxWriter workbook and worksheet objects from the dataframe.
+workbook  = writer.book
+worksheet = writer.sheets[sheet_name]
+
+# Create a chart object.
+chart = workbook.add_chart({'type': 'line'})
+
+# Configure the series of the chart from the dataframe data.
+for i in range(0,n):
+    col = i + 1
+    chart.add_series({
+        'name':       ['Sheet1', i+1,1],
+        'categories': ['Sheet1',0,2,0,maxmonth],
+        'values':     ['Sheet1',i+1,2,i+1,maxmonth ],
+    })
+
+# Configure the chart axes.
+chart.set_x_axis({'name': 'Months'})
+chart.set_y_axis({'name': 'Units Sold', 'major_gridlines': {'visible': False}})
+
+# Insert the chart into the worksheet.
+worksheet.insert_chart('K2', chart)
+
+# Close the Pandas Excel writer and output the Excel file.
+writer.save()
+
+
+#re-open and read the file you just made
+readfile=pd.read_excel('pandas_chart_line.xlsx')
+
+#eliminate superfluous columns of data
+file2=readfile.iloc[0:n,minmonth:maxmonth+1]
+
+
+for xscount in range (minmonth,maxmonth+1):
+    xs=np.append([xs],[xscount],)
+xs = sm.add_constant(xs)
+
+for instances in range (0,n):
+    #for true_ys in range (minmonth,maxmonth):
+    yy=file2.loc[instances]
+    result = sm.OLS(yy, xs).fit()   
+    results=np.append(results,result.params)
+    #print (result.params)
+    #ys=np.append([ys],yy,)
+r2=pd.DataFrame(results)        
+#for regressionlines in range (0,n):
+#    results=np.append(results,result.params)
+    
+#print(results.params)
+
+# Create a Pandas Excel writer using XlsxWriter as the engine.
+sheet_name2 = 'Regression Analysis'
+writer     = pd.ExcelWriter('Regression_Analysis.xlsx', engine='xlsxwriter')
+
+for xxx in range(0,n*2):
+    if xxx%2>0: 
+        r3=r2.iloc[xxx]
+        r33=np.append(r33,r3)
+
+r4=pd.DataFrame(r33)  
+ranking=pd.concat([flattened, r4], axis=1)
+ranking.to_excel(writer, sheet_name=sheet_name2)
+
+
+    
+# Access the XlsxWriter workbook and worksheet objects from the dataframe.
+#workbook  = writer.book
+#worksheet = writer.sheets[sheet_name]
+
+
+# Close the Pandas Excel writer and output the Excel file.
+writer.save()
